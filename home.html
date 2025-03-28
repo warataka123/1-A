@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>みんなでチャット</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .message {
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            max-width: 80%;
+        }
+        .sender {
+            background-color: #e0f7fa; /* 水色 */
+            color: #00897b; /* 青緑 */
+            margin-left: auto; /* 右寄せ */
+            text-align: right;
+        }
+        .receiver {
+            background-color: #f0f4c3; /* 黄色 */
+            color: #795548; /* 茶色 */
+            margin-right: auto; /* 左寄せ */
+            text-align: left;
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+            font-size: 0.75rem;
+        }
+        .sender .message-header {
+            flex-direction: row-reverse;
+        }
+    </style>
+    <script>
+        // WebSocket接続のための変数
+        let ws;
+        let username = ''; // ユーザー名を保存する変数
+
+        // ページ読み込み完了時の処理
+        window.onload = function() {
+            // ユーザー名設定プロンプトを表示
+            username = prompt('あなたの名前を入力してください:', '名無しさん');
+            if (!username || username.trim() === '') {
+                username = '名無しさん'; // デフォルト名を「名無しさん」とする
+            }
+
+            // WebSocket接続を開始
+            startWebSocket();
+
+            // メッセージ送信ボタンのクリックイベントを設定
+            document.getElementById('sendButton').addEventListener('click', sendMessage);
+
+            // テキストボックスでEnterキーが押された時の処理
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+        };
+
+        // WebSocket接続を開始する関数
+        function startWebSocket() {
+            // WebSocketのURL
+            const wsUrl = 'ws://' + location.host + '/chat'; // '/chat'エンドポイントに接続
+
+            // WebSocketオブジェクトを作成
+            ws = new WebSocket(wsUrl);
+
+            // WebSocket接続が確立した時の処理
+            ws.onopen = function() {
+                console.log('WebSocket接続が確立しました');
+                addMessageToChat('システム', '接続しました！', ''); // 接続メッセージを表示
+            };
+
+            // WebSocketからメッセージを受信した時の処理
+            ws.onmessage = function(message) {
+                console.log('メッセージを受信しました:', message.data);
+                const data = JSON.parse(message.data);
+                addMessageToChat(data.sender, data.message, data.timestamp); // 受信したメッセージをチャットに表示
+            };
+
+            // WebSocket接続が切断した時の処理
+            ws.onclose = function() {
+                console.log('WebSocket接続が切断しました');
+                addMessageToChat('システム', '切断しました。再接続を試みます...', ''); // 切断メッセージを表示
+                setTimeout(startWebSocket, 3000); // 3秒後に再接続を試みる
+            };
+
+            // WebSocket接続でエラーが発生した時の処理
+            ws.onerror = function(error) {
+                console.error('WebSocketエラー:', error);
+                addMessageToChat('システム', 'エラーが発生しました。', ''); // エラーメッセージを表示
+            };
+        }
+
+        // メッセージを送信する関数
+        function sendMessage() {
+            // テキストボックスからメッセージを取得
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+
+            // メッセージが空でないか確認
+            if (message !== '') {
+                // 送信するデータを作成
+                const data = {
+                    sender: username, // ユーザー名を使用
+                    message: message,
+                    timestamp: new Date().toISOString() // タイムスタンプを追加
+                };
+
+                // WebSocketでデータを送信
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(data));
+                } else {
+                    console.error('WebSocket接続が確立していません。');
+                    addMessageToChat('システム', 'メッセージを送信できませんでした。再接続してください。', '');
+                }
+
+                // テキストボックスを空にする
+                messageInput.value = '';
+            }
+        }
+
+        // メッセージをチャットに追加する関数
+        function addMessageToChat(sender, message, timestamp) {
+            // チャット表示領域の要素を取得
+            const chatMessages = document.getElementById('chatMessages');
+
+            // 新しいメッセージの要素を作成
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            if (sender === 'あなた') {
+                messageElement.classList.add('sender');
+            } else {
+                messageElement.classList.add('receiver');
+            }
+
+            // メッセージヘッダーを作成（送信者名とタイムスタンプ）
+            const messageHeader = document.createElement('div');
+            messageHeader.classList.add('message-header');
+            const senderName = document.createElement('span');
+            senderName.textContent = sender;
+            const messageTime = document.createElement('span');
+            if (timestamp) {
+                const date = new Date(timestamp);
+                const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                messageTime.textContent = formattedTime;
+            } else {
+                messageTime.textContent = '';
+            }
+            messageHeader.appendChild(senderName);
+            messageHeader.appendChild(messageTime);
+
+            // メッセージ本文の要素を作成
+            const messageBody = document.createElement('p');
+            messageBody.textContent = message;
+
+            // メッセージ要素にヘッダーと本文を追加
+            messageElement.appendChild(messageHeader);
+            messageElement.appendChild(messageBody);
+
+            // チャット表示領域にメッセージを追加
+            chatMessages.appendChild(messageElement);
+
+            // チャット表示領域をスクロールして最新のメッセージを表示
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+    <header class="bg-green-500 text-white p-4 text-center shadow-md">
+        <h1 class="text-2xl font-semibold">みんなでチャット</h1>
+    </header>
+    <main class="flex-1 overflow-y-auto p-4" id="chatMessages">
+        </main>
+    <footer class="bg-gray-200 p-4">
+        <div class="flex items-center gap-2">
+            <input type="text" id="messageInput" placeholder="メッセージを入力してください" class="flex-1 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button id="sendButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline">送信</button>
+        </div>
+    </footer>
+</body>
+</html>
