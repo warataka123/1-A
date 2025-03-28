@@ -116,7 +116,12 @@
                 };
 
                 // WebSocketでデータを送信
-                ws.send(JSON.stringify(data));
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(data));
+                } else {
+                    console.error('WebSocket接続が確立していません。');
+                    addMessageToChat('システム', 'メッセージを送信できませんでした。再接続してください。', '');
+                }
 
                 // テキストボックスを空にする
                 messageInput.value = '';
